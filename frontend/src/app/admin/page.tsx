@@ -5,15 +5,15 @@ import { AdminDashboard } from "@/components/admin/admin-dashboard";
 const adminCards = [
   {
     title: "Campaign Manager",
-    description: "Create, review, and launch prevention campaigns with validated targeting rules.",
+    description: "Create and maintain prevention campaigns with validated targeting contracts.",
   },
   {
     title: "Audience Previewer",
-    description: "Run segmentation previews and inspect matched audience size before launch.",
+    description: "Estimate population reach before launch using live stratification filters.",
   },
   {
-    title: "Impact Analytics Hub",
-    description: "Track campaign ROI and regional coverage with decision-ready metrics.",
+    title: "Operational Monitoring",
+    description: "Track ROI and regional outcomes as communication and engagement events arrive.",
   },
 ];
 
@@ -24,7 +24,8 @@ export default function AdminPage() {
         <p className="text-xs uppercase tracking-[0.24em] text-slate-100/80">PreventHub / Admin Portal</p>
         <h1 className="mt-3 text-3xl font-semibold sm:text-4xl">Public Health Operations</h1>
         <p className="mt-3 max-w-2xl text-sm text-slate-100/90 sm:text-base">
-          Phase A baseline is now active. This portal is wired around real backend contracts and ready for feature implementation.
+          Run end-to-end campaign operations from drafting to launch, then monitor audience conversion as asynchronous
+          analytics updates land.
         </p>
       </header>
 

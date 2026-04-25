@@ -79,4 +79,37 @@ describe("CitizenDashboard", () => {
     });
     expect(api.trackClick).toHaveBeenCalledWith(1, 1);
   });
+
+  it("blocks preference updates when patient id is invalid", async () => {
+    renderCitizen();
+
+    await waitFor(() => expect(screen.getByTestId("citizen-patient-id-input")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId("citizen-patient-id-input"), { target: { value: 0 } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid patient ID");
+    });
+
+    fireEvent.click(screen.getByTestId("channel-push"));
+    await waitFor(() => {
+      expect(screen.getByTestId("citizen-preference-status")).toHaveTextContent("Patient ID must be a positive number");
+    });
+
+    expect(api.updatePreference).not.toHaveBeenCalled();
+  });
+
+  it("shows active campaigns fetch error and retries", async () => {
+    vi.mocked(api.listActiveCampaigns).mockRejectedValueOnce(new Error("gateway error")).mockResolvedValueOnce([
+      { id: 1, name: "Flu drive", status: "ACTIVE", rules: [] },
+    ]);
+
+    renderCitizen();
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Failed to load active campaigns"));
+
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+
+    await waitFor(() => expect(api.listActiveCampaigns).toHaveBeenCalledTimes(2));
+  });
 });

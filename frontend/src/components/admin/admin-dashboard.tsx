@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { MOROCCAN_REGIONS, MILIEUX, RISK_LEVELS } from "@/lib/api/constants";
@@ -14,6 +14,8 @@ import {
   useRoi,
   useStratifyAudience,
 } from "@/lib/api/hooks";
+import { MetricCard } from "@/components/ui/metric-card";
+import { StatusMessage } from "@/components/ui/status-message";
 import { toRuleInputs } from "@/lib/api/admin-utils";
 import type { Campaign, CreateRuleInput, MilieuName, RiskLevelName } from "@/lib/api/types";
 
@@ -27,21 +29,6 @@ const defaultRule: CreateRuleInput = {
 
 type SectionStatus = { variant: "success" | "error"; message: string } | null;
 
-function StatusLine({ status, testId }: { status: SectionStatus; testId: string }) {
-  if (!status) {
-    return null;
-  }
-  const styles =
-    status.variant === "success"
-      ? "border border-emerald-200 bg-emerald-50 text-emerald-900"
-      : "border border-red-200 bg-red-50 text-red-900";
-  return (
-    <p data-testid={testId} className={`mt-3 rounded-lg px-3 py-2 text-sm ${styles}`} role="status">
-      {status.message}
-    </p>
-  );
-}
-
 export function AdminDashboard() {
   const campaignsQuery = useCampaigns();
   const createCampaignMutation = useCreateCampaign();
@@ -54,6 +41,10 @@ export function AdminDashboard() {
   const [ruleStatus, setRuleStatus] = useState<SectionStatus>(null);
   const [launchStatus, setLaunchStatus] = useState<SectionStatus>(null);
   const [previewStatus, setPreviewStatus] = useState<SectionStatus>(null);
+  const [analyticsStatus, setAnalyticsStatus] = useState<SectionStatus>(null);
+  const [analyticsLastUpdated, setAnalyticsLastUpdated] = useState<string | null>(null);
+  const [isAutoRefreshingAnalytics, setIsAutoRefreshingAnalytics] = useState(false);
+  const analyticsSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const campaigns = useMemo(() => campaignsQuery.data ?? [], [campaignsQuery.data]);
   const effectiveCampaignId = useMemo(() => {
@@ -74,6 +65,89 @@ export function AdminDashboard() {
   const regionalQuery = useRegionalCoverage(effectiveCampaignId);
 
   const analyticsFetching = roiQuery.isFetching || regionalQuery.isFetching;
+
+  function stopAnalyticsAutoRefresh() {
+    if (analyticsSyncIntervalRef.current !== null) {
+      clearInterval(analyticsSyncIntervalRef.current);
+      analyticsSyncIntervalRef.current = null;
+    }
+    setIsAutoRefreshingAnalytics(false);
+  }
+
+  async function refreshAnalyticsNow() {
+    const [roiResult, regionalResult] = await Promise.all([roiQuery.refetch(), regionalQuery.refetch()]);
+    if (roiResult.error || regionalResult.error) {
+      throw new Error("Analytics refresh failed. Please retry.");
+    }
+    setAnalyticsLastUpdated(new Date().toLocaleTimeString());
+    return roiResult.data?.total_messages ?? 0;
+  }
+
+  async function handleManualAnalyticsRefresh() {
+    setAnalyticsStatus(null);
+    try {
+      const totalMessages = await refreshAnalyticsNow();
+      setAnalyticsStatus({
+        variant: "success",
+        message:
+          totalMessages > 0
+            ? "Analytics refreshed successfully. Message activity is now visible."
+            : "Analytics refreshed. No message activity yet for this campaign.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to refresh analytics";
+      setAnalyticsStatus({ variant: "error", message });
+    }
+  }
+
+  function startAnalyticsAutoRefresh() {
+    if (effectiveCampaignId === null) {
+      return;
+    }
+
+    stopAnalyticsAutoRefresh();
+    setIsAutoRefreshingAnalytics(true);
+    setAnalyticsStatus({
+      variant: "success",
+      message: "Audience preview submitted. Syncing analytics every 5 seconds while events are processed.",
+    });
+
+    let attempts = 0;
+    const maxAttempts = 12;
+    analyticsSyncIntervalRef.current = setInterval(() => {
+      attempts += 1;
+      void refreshAnalyticsNow()
+        .then((totalMessages) => {
+          if (totalMessages > 0) {
+            setAnalyticsStatus({
+              variant: "success",
+              message: "Analytics sync completed. Message activity has started for this campaign.",
+            });
+            stopAnalyticsAutoRefresh();
+            return;
+          }
+
+          if (attempts >= maxAttempts) {
+            setAnalyticsStatus({
+              variant: "error",
+              message: "Analytics still processing after 60 seconds. Use manual refresh to continue checking.",
+            });
+            stopAnalyticsAutoRefresh();
+          }
+        })
+        .catch(() => {
+          if (attempts >= maxAttempts) {
+            setAnalyticsStatus({
+              variant: "error",
+              message: "Analytics auto-sync encountered repeated errors. Use manual refresh to retry.",
+            });
+            stopAnalyticsAutoRefresh();
+          }
+        });
+    }, 5000);
+  }
+
+  useEffect(() => stopAnalyticsAutoRefresh, []);
 
   async function handleCreateCampaign() {
     setCreateStatus(null);
@@ -119,15 +193,11 @@ export function AdminDashboard() {
         variant: "success",
         message: `Audience preview complete: ${result.matched_count} matched patients. Analytics will update as messages are processed.`,
       });
+      startAnalyticsAutoRefresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to preview audience";
       setPreviewStatus({ variant: "error", message });
     }
-  }
-
-  function refreshAnalytics() {
-    void roiQuery.refetch();
-    void regionalQuery.refetch();
   }
 
   return (
@@ -143,6 +213,9 @@ export function AdminDashboard() {
               onChange={(event) => setNewCampaignName(event.target.value)}
               placeholder="Campaign name"
               data-testid="campaign-name-input"
+              aria-label="Campaign name"
+              aria-invalid={newCampaignName.trim().length > 0 && newCampaignName.trim().length < 3}
+              aria-describedby={newCampaignName.trim().length > 0 && newCampaignName.trim().length < 3 ? "campaign-name-help" : undefined}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
             />
             <button
@@ -155,7 +228,19 @@ export function AdminDashboard() {
               {createCampaignMutation.isPending ? "Creating..." : "Create"}
             </button>
           </div>
-          <StatusLine status={createStatus} testId="admin-status-create" />
+          {newCampaignName.trim().length > 0 && newCampaignName.trim().length < 3 ? (
+            <p id="campaign-name-help" className="mt-2 text-xs text-red-700" role="alert">
+              Campaign name must be at least 3 characters.
+            </p>
+          ) : null}
+          {createStatus ? (
+            <StatusMessage
+              variant={createStatus.variant}
+              message={createStatus.message}
+              testId="admin-status-create"
+              className="mt-3"
+            />
+          ) : null}
         </article>
 
         <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -243,6 +328,11 @@ export function AdminDashboard() {
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Targeting Rule Builder</h2>
+        {ruleForm.max_age < ruleForm.min_age ? (
+          <p id="rule-age-range-help" className="mt-3 text-xs text-red-700" role="alert">
+            Max age must be greater than or equal to min age.
+          </p>
+        ) : null}
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <label className="grid gap-1 text-sm text-slate-700">
             Min Age
@@ -257,6 +347,8 @@ export function AdminDashboard() {
                   min_age: Number(event.target.value),
                 }))
               }
+              aria-invalid={ruleForm.max_age < ruleForm.min_age}
+              aria-describedby={ruleForm.max_age < ruleForm.min_age ? "rule-age-range-help" : undefined}
               className="rounded-lg border border-slate-300 px-3 py-2"
             />
           </label>
@@ -273,6 +365,8 @@ export function AdminDashboard() {
                   max_age: Number(event.target.value),
                 }))
               }
+              aria-invalid={ruleForm.max_age < ruleForm.min_age}
+              aria-describedby={ruleForm.max_age < ruleForm.min_age ? "rule-age-range-help" : undefined}
               className="rounded-lg border border-slate-300 px-3 py-2"
             />
           </label>
@@ -367,9 +461,30 @@ export function AdminDashboard() {
           </button>
         </div>
 
-        <StatusLine status={ruleStatus} testId="admin-status-rule" />
-        <StatusLine status={launchStatus} testId="admin-status-launch" />
-        <StatusLine status={previewStatus} testId="admin-status-preview" />
+        {ruleStatus ? (
+          <StatusMessage
+            variant={ruleStatus.variant}
+            message={ruleStatus.message}
+            testId="admin-status-rule"
+            className="mt-3"
+          />
+        ) : null}
+        {launchStatus ? (
+          <StatusMessage
+            variant={launchStatus.variant}
+            message={launchStatus.message}
+            testId="admin-status-launch"
+            className="mt-3"
+          />
+        ) : null}
+        {previewStatus ? (
+          <StatusMessage
+            variant={previewStatus.variant}
+            message={previewStatus.message}
+            testId="admin-status-preview"
+            className="mt-3"
+          />
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -381,13 +496,31 @@ export function AdminDashboard() {
           <button
             type="button"
             data-testid="refresh-analytics-button"
-            onClick={() => refreshAnalytics()}
+            onClick={() => void handleManualAnalyticsRefresh()}
             disabled={effectiveCampaignId === null || analyticsFetching}
             className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {analyticsFetching ? "Refreshing..." : "Refresh metrics"}
           </button>
         </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+          <span>
+            Last updated: <strong>{analyticsLastUpdated ?? "not refreshed yet"}</strong>
+          </span>
+          <span>
+            Auto-sync: <strong>{isAutoRefreshingAnalytics ? "running" : "idle"}</strong>
+          </span>
+        </div>
+
+        {analyticsStatus ? (
+          <StatusMessage
+            variant={analyticsStatus.variant}
+            message={analyticsStatus.message}
+            testId="admin-status-analytics"
+            className="mt-3"
+          />
+        ) : null}
 
         {effectiveCampaignId === null ? (
           <p className="mt-4 text-sm text-slate-600">Select a campaign to load ROI.</p>
@@ -406,24 +539,9 @@ export function AdminDashboard() {
           </p>
         ) : (
           <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <article className="rounded-2xl border border-slate-100 bg-slate-50/80 p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Messages</p>
-              <p data-testid="roi-total-messages" className="mt-2 text-3xl font-semibold text-slate-900">
-                {roiQuery.data?.total_messages ?? 0}
-              </p>
-            </article>
-            <article className="rounded-2xl border border-slate-100 bg-slate-50/80 p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Bookings</p>
-              <p data-testid="roi-total-bookings" className="mt-2 text-3xl font-semibold text-slate-900">
-                {roiQuery.data?.total_bookings ?? 0}
-              </p>
-            </article>
-            <article className="rounded-2xl border border-slate-100 bg-slate-50/80 p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Conversion Rate</p>
-              <p data-testid="roi-conversion-rate" className="mt-2 text-3xl font-semibold text-slate-900">
-                {roiQuery.data?.conversion_rate ?? 0}%
-              </p>
-            </article>
+            <MetricCard title="Total Messages" value={roiQuery.data?.total_messages ?? 0} testId="roi-total-messages" />
+            <MetricCard title="Total Bookings" value={roiQuery.data?.total_bookings ?? 0} testId="roi-total-bookings" />
+            <MetricCard title="Conversion Rate" value={`${roiQuery.data?.conversion_rate ?? 0}%`} testId="roi-conversion-rate" />
           </div>
         )}
       </section>

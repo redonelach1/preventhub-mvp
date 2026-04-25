@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { CHANNELS, MOROCCAN_REGIONS, MILIEUX, RISK_LEVELS } from "@/lib/api/constants";
 import { useActiveCampaigns, usePreference, useUpdatePreference } from "@/lib/api/hooks";
 import { api } from "@/lib/api/client";
+import { StatusMessage } from "@/components/ui/status-message";
 import type { ActiveCampaignQuery, ChannelName, MilieuName, RiskLevelName } from "@/lib/api/types";
 
 const DEFAULT_PROFILE: ActiveCampaignQuery = {
@@ -35,7 +36,13 @@ export function CitizenDashboard() {
   }, [activeCampaignsQuery.data]);
 
   async function handleQuickAction(action: "click" | "adherence") {
+    if (patientId <= 0) {
+      setEngagementStatus({ variant: "error", message: "Patient ID must be a positive number before tracking actions." });
+      return;
+    }
+
     if (!topCampaign) {
+      setEngagementStatus({ variant: "error", message: "No active campaign available for this profile yet." });
       return;
     }
 
@@ -58,6 +65,11 @@ export function CitizenDashboard() {
   }
 
   async function onChannelChange(channel: ChannelName) {
+    if (patientId <= 0) {
+      setPreferenceStatus({ variant: "error", message: "Patient ID must be a positive number before updating preferences." });
+      return;
+    }
+
     setPreferenceStatus(null);
     try {
       await updatePreferenceMutation.mutateAsync(channel);
@@ -202,17 +214,12 @@ export function CitizenDashboard() {
           </button>
         </div>
         {engagementStatus ? (
-          <p
-            data-testid="citizen-engagement-status"
-            className={`mt-4 rounded-lg px-3 py-2 text-sm ${
-              engagementStatus.variant === "success"
-                ? "border border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border border-red-200 bg-red-50 text-red-900"
-            }`}
-            role="status"
-          >
-            {engagementStatus.message}
-          </p>
+          <StatusMessage
+            variant={engagementStatus.variant}
+            message={engagementStatus.message}
+            testId="citizen-engagement-status"
+            className="mt-4"
+          />
         ) : null}
       </section>
 
@@ -227,11 +234,19 @@ export function CitizenDashboard() {
             type="number"
             min={1}
             value={patientId}
-            onChange={(event) => setPatientId(Number(event.target.value || 1))}
+            onChange={(event) => setPatientId(Number(event.target.value || 0))}
             data-testid="citizen-patient-id-input"
+            aria-invalid={patientId <= 0}
+            aria-describedby={patientId <= 0 ? "citizen-patient-id-help" : undefined}
             className="w-24 rounded-lg border border-slate-300 px-2 py-1"
           />
         </div>
+
+        {patientId <= 0 ? (
+          <p id="citizen-patient-id-help" className="mt-3 text-xs text-red-700" role="alert">
+            Enter a valid patient ID to load and update communication preferences.
+          </p>
+        ) : null}
 
         {preferenceQuery.isLoading ? (
           <p className="mt-4 text-sm text-slate-600">Loading preference...</p>
@@ -271,17 +286,12 @@ export function CitizenDashboard() {
         )}
 
         {preferenceStatus ? (
-          <p
-            data-testid="citizen-preference-status"
-            className={`mt-4 rounded-lg px-3 py-2 text-sm ${
-              preferenceStatus.variant === "success"
-                ? "border border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border border-red-200 bg-red-50 text-red-900"
-            }`}
-            role="status"
-          >
-            {preferenceStatus.message}
-          </p>
+          <StatusMessage
+            variant={preferenceStatus.variant}
+            message={preferenceStatus.message}
+            testId="citizen-preference-status"
+            className="mt-4"
+          />
         ) : null}
       </section>
     </div>

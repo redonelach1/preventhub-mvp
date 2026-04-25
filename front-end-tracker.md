@@ -163,6 +163,45 @@ Goal:
 Scope note:
 - Docker integration, e2e profile, unit + integration tests are in place; optional follow-ups: accessibility audit, visual polish, shadcn/ui if desired
 
+Progress evidence (latest):
+- productized language pass applied to home/admin/citizen entry pages:
+  - `frontend/src/app/page.tsx`
+  - `frontend/src/app/admin/page.tsx`
+  - `frontend/src/app/citizen/page.tsx`
+- admin analytics monitoring improved with operational sync behavior in `frontend/src/components/admin/admin-dashboard.tsx`:
+  - post-preview auto-sync loop (5s interval, max attempts)
+  - manual refresh status messaging
+  - last-updated timestamp and auto-sync state indicator
+- citizen action hardening added in `frontend/src/components/citizen/citizen-dashboard.tsx`:
+  - positive patient-id guards before engagement/preference mutations
+  - clearer inline invalid-id alert and backend-safe mutation blocking
+- tests updated for new UX contract:
+  - `frontend/src/app/page.test.tsx`
+  - `frontend/src/components/citizen/citizen-dashboard.test.tsx`
+
+Progress evidence (this execution slice):
+- shared UI primitives introduced for consistency and maintainability:
+  - `frontend/src/components/ui/status-message.tsx`
+  - `frontend/src/components/ui/metric-card.tsx`
+- admin and citizen dashboards now consume shared primitives:
+  - status rendering moved to shared `StatusMessage`
+  - ROI metric cards moved to shared `MetricCard`
+- regression coverage expanded for backend failure/retry UX:
+  - admin campaigns fetch error + retry test in `frontend/src/components/admin/admin-dashboard.test.tsx`
+  - citizen active-campaigns fetch error + retry test in `frontend/src/components/citizen/citizen-dashboard.test.tsx`
+
+Progress evidence (latest execution slice):
+- analytics regression tests expanded for backend retry behavior in `frontend/src/components/admin/admin-dashboard.test.tsx`:
+  - ROI fetch failure + retry + recovery assertion
+  - regional coverage fetch failure + retry + chart recovery assertion
+- accessibility improvements applied in form controls:
+  - admin campaign name input now includes `aria-label`, `aria-invalid`, and `aria-describedby`
+  - admin rule age range validation now exposes alert text and invalid field semantics
+  - citizen patient id input now exposes invalid state via ARIA and linked helper text
+  - files:
+    - `frontend/src/components/admin/admin-dashboard.tsx`
+    - `frontend/src/components/citizen/citizen-dashboard.tsx`
+
 ## Testing Matrix
 
 Unit tests:
@@ -172,8 +211,15 @@ Unit tests:
 Current automated test status:
 - `docker run --rm preventhub-frontend-tester npm run typecheck` passed
 - `docker run --rm preventhub-frontend-tester npm run lint` passed
-- `docker run --rm preventhub-frontend-tester npm run test` passed (8 tests: utilities + admin/citizen RTL integration)
+- `docker run --rm preventhub-frontend-tester npm run test` passed (13 tests: utilities + admin/citizen RTL integration + analytics and failure/retry regressions)
 - `docker compose --profile test run --rm frontend-e2e npm run test:e2e` passed (3 tests: admin workflow, admin analytics async, citizen flows; requires full stack up)
+
+Latest execution note:
+- after UI/test updates, e2e required rebuilding `frontend-e2e` image before re-run; post-rebuild Playwright passed all 3 tests.
+- NGINX was force-recreated before e2e to ensure gateway routing remained current.
+
+Verification note:
+- React unit tests emit a known Recharts container-size warning in jsdom when validating chart render presence; this does not affect runtime Docker/e2e behavior.
 
 Integration tests:
 - query hooks with mocked responses
@@ -209,7 +255,7 @@ Observed note:
 
 1. Optional: adopt shadcn/ui for consistent form controls and dialogs.
 2. Optional: dedicated `/analytics` route or drill-down views if product scope expands.
-3. Phase F: accessibility pass (labels, focus order) and any additional regression scenarios you care about for release.
+3. Phase F: accessibility pass (labels, focus order), keyboard navigation checks, and additional failure/retry regression scenarios around analytics fetch failures.
 
 ## Update Rules
 

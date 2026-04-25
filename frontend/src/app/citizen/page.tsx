@@ -3,9 +3,9 @@ import Link from "next/link";
 import { CitizenDashboard } from "@/components/citizen/citizen-dashboard";
 
 const citizenHighlights = [
-  "Personalized active campaign discovery",
-  "One-click engagement actions",
-  "Communication preference updates",
+  "Profile-based campaign recommendations",
+  "Quick participation actions",
+  "Channel preference management",
 ];
 
 export default function CitizenPage() {
@@ -15,12 +15,13 @@ export default function CitizenPage() {
         <p className="text-xs uppercase tracking-[0.24em] text-orange-100/85">PreventHub / Citizen Portal</p>
         <h1 className="mt-3 text-3xl font-semibold sm:text-4xl">Your Prevention Dashboard</h1>
         <p className="mt-3 max-w-2xl text-sm text-orange-100/90 sm:text-base">
-          This baseline page is ready to receive personalized campaign cards, engagement actions, and channel preferences.
+          Explore prevention campaigns matched to your profile, register participation actions, and control how you
+          receive outreach messages.
         </p>
       </header>
 
       <div className="rounded-2xl border border-orange-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">MVP focus</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Citizen journey focus</h2>
         <ul className="mt-3 space-y-2 text-sm text-slate-600">
           {citizenHighlights.map((item) => (
             <li key={item} className="flex items-start gap-2">

@@ -7,8 +7,8 @@ describe("home page", () => {
   it("renders portal entry points", () => {
     render(<Home />);
 
-    expect(screen.getByRole("heading", { name: /frontend foundation/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /open admin baseline/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /open citizen baseline/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /operational console/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open admin console/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open citizen space/i })).toBeInTheDocument();
   });
 });
