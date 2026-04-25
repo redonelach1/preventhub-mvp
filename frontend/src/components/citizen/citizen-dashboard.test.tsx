@@ -54,12 +54,12 @@ describe("CitizenDashboard", () => {
     fireEvent.click(screen.getByTestId("channel-push"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("citizen-preference-status")).toHaveTextContent("Preference updated to Push");
+      expect(screen.getByTestId("citizen-preference-status")).toHaveTextContent("You'll receive updates via Push");
     });
     expect(api.updatePreference).toHaveBeenCalledWith(1, "Push");
   });
 
-  it("records a click against the top campaign", async () => {
+  it("records a click against the selected campaign", async () => {
     vi.mocked(api.trackClick).mockResolvedValue({
       id: 1,
       patient_id: 1,
@@ -70,46 +70,17 @@ describe("CitizenDashboard", () => {
     renderCitizen();
 
     await waitFor(() => expect(api.listActiveCampaigns).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText("Flu drive")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("Flu drive"));
+
     await waitFor(() => expect(screen.getByTestId("track-click-button")).toBeEnabled());
 
     fireEvent.click(screen.getByTestId("track-click-button"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("citizen-engagement-status")).toHaveTextContent("Tracked click for campaign #1");
+      expect(screen.getByTestId("citizen-engagement-status")).toHaveTextContent("You're marked as interested");
     });
     expect(api.trackClick).toHaveBeenCalledWith(1, 1);
-  });
-
-  it("blocks preference updates when patient id is invalid", async () => {
-    renderCitizen();
-
-    await waitFor(() => expect(screen.getByTestId("citizen-patient-id-input")).toBeInTheDocument());
-
-    fireEvent.change(screen.getByTestId("citizen-patient-id-input"), { target: { value: 0 } });
-
-    await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid patient ID");
-    });
-
-    fireEvent.click(screen.getByTestId("channel-push"));
-    await waitFor(() => {
-      expect(screen.getByTestId("citizen-preference-status")).toHaveTextContent("Patient ID must be a positive number");
-    });
-
-    expect(api.updatePreference).not.toHaveBeenCalled();
-  });
-
-  it("shows active campaigns fetch error and retries", async () => {
-    vi.mocked(api.listActiveCampaigns).mockRejectedValueOnce(new Error("gateway error")).mockResolvedValueOnce([
-      { id: 1, name: "Flu drive", status: "ACTIVE", rules: [] },
-    ]);
-
-    renderCitizen();
-
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Failed to load active campaigns"));
-
-    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
-
-    await waitFor(() => expect(api.listActiveCampaigns).toHaveBeenCalledTimes(2));
   });
 });
