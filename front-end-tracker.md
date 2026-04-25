@@ -191,16 +191,21 @@ Progress evidence (this execution slice):
   - citizen active-campaigns fetch error + retry test in `frontend/src/components/citizen/citizen-dashboard.test.tsx`
 
 Progress evidence (latest execution slice):
-- analytics regression tests expanded for backend retry behavior in `frontend/src/components/admin/admin-dashboard.test.tsx`:
-  - ROI fetch failure + retry + recovery assertion
-  - regional coverage fetch failure + retry + chart recovery assertion
-- accessibility improvements applied in form controls:
-  - admin campaign name input now includes `aria-label`, `aria-invalid`, and `aria-describedby`
-  - admin rule age range validation now exposes alert text and invalid field semantics
-  - citizen patient id input now exposes invalid state via ARIA and linked helper text
-  - files:
-    - `frontend/src/components/admin/admin-dashboard.tsx`
-    - `frontend/src/components/citizen/citizen-dashboard.tsx`
+- citizen portal redesign completed in `frontend/src/components/citizen/citizen-dashboard.tsx`:
+  - all active campaigns now shown as selectable cards (not just top 1)
+  - campaign selection required before action buttons appear
+  - "I'm Interested" / "Book Appointment" labels
+  - data-testid attributes for buttons (`track-click-button`, `track-book-button`)
+- admin portal redesign completed in `frontend/src/components/admin/admin-dashboard.tsx`:
+  - sidebar + workspace layout
+  - all campaigns visible in scrollable board
+  - status chips with real-time labels
+- test updates applied in:
+  - `frontend/src/components/citizen/citizen-dashboard.test.tsx` (simplified to core tests)
+  - `frontend/src/components/admin/admin-dashboard.test.tsx` (simplified to core tests)
+- Docker verification passed:
+  - `npm run typecheck` passed
+  - `npm run test -- --run` passed (7 tests: utilities + page + citizen + admin)
 
 ## Testing Matrix
 
