@@ -1,0 +1,164 @@
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: preventhub-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    ports:
+      - "9092:9092"
+
+  postgres:
+    image: postgres:15
+    container_name: preventhub-postgres
+    environment:
+      POSTGRES_USER: preventhub
+      POSTGRES_PASSWORD: preventhub
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U preventhub -d postgres && test -f /tmp/postgres-init-complete"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: preventhub-nginx
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      frontend:
+        condition: service_started
+      campaign-service:
+        condition: service_started
+      stratification-service:
+        condition: service_started
+      communication-service:
+        condition: service_started
+      engagement-service:
+        condition: service_started
+      analytics-service:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: preventhub-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ""
+
+  frontend-e2e:
+    build:
+      context: ./frontend
+      target: e2e
+    container_name: preventhub-frontend-e2e
+    profiles: ["test"]
+    environment:
+      PLAYWRIGHT_BASE_URL: http://nginx:8000
+    depends_on:
+      nginx:
+        condition: service_started
+
+  campaign-service:
+    build:
+      context: ./campaign-service
+    container_name: preventhub-campaign-service
+    restart: unless-stopped
+    environment:
+      SERVICE_PORT: 8001
+      DATABASE_URL: postgresql+psycopg2://preventhub:preventhub@postgres:5432/campaign_db
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  stratification-service:
+    build:
+      context: ./stratification-service
+    container_name: preventhub-stratification-service
+    restart: unless-stopped
+    environment:
+      SERVICE_PORT: 8002
+      DATABASE_URL: postgresql+psycopg2://preventhub:preventhub@postgres:5432/stratification_db
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUDIENCE_TOPIC: audience.generated
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  communication-service:
+    build:
+      context: ./communication-service
+    container_name: preventhub-communication-service
+    restart: unless-stopped
+    environment:
+      SERVICE_PORT: 8003
+      DATABASE_URL: postgresql+psycopg2://preventhub:preventhub@postgres:5432/communication_db
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUDIENCE_TOPIC: audience.generated
+      MESSAGE_SENT_TOPIC: message.sent
+      KAFKA_CONSUMER_GROUP: communication-service-group
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  engagement-service:
+    build:
+      context: ./engagement-service
+    container_name: preventhub-engagement-service
+    restart: unless-stopped
+    environment:
+      SERVICE_PORT: 8004
+      DATABASE_URL: postgresql+psycopg2://preventhub:preventhub@postgres:5432/engagement_db
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      USER_ENGAGED_TOPIC: user.engaged
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  analytics-service:
+    build:
+      context: ./analytics-service
+    container_name: preventhub-analytics-service
+    restart: unless-stopped
+    environment:
+      SERVICE_PORT: 8005
+      DATABASE_URL: postgresql+psycopg2://preventhub:preventhub@postgres:5432/analytics_db
+      STRATIFICATION_DATABASE_URL: postgresql+psycopg2://preventhub:preventhub@postgres:5432/stratification_db
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MESSAGE_SENT_TOPIC: message.sent
+      USER_ENGAGED_TOPIC: user.engaged
+      KAFKA_CONSUMER_GROUP: analytics-service-group
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
