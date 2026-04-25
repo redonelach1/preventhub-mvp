@@ -29,12 +29,62 @@ const defaultRule: CreateRuleInput = {
 
 type SectionStatus = { variant: "success" | "error"; message: string } | null;
 
+function CampaignRow({
+  campaign,
+  isSelected,
+  onSelect,
+}: {
+  campaign: Campaign;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full rounded-lg border p-3 text-left transition-all ${
+        isSelected
+          ? "border-sky-600 bg-sky-50 ring-2 ring-sky-200"
+          : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-slate-900">{campaign.name}</p>
+          <p className="text-xs text-slate-500">ID: {campaign.id}</p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+            campaign.status === "ACTIVE"
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-slate-100 text-slate-600"
+          }`}
+        >
+          {campaign.status}
+        </span>
+      </div>
+      {campaign.rules.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {campaign.rules.slice(0, 2).map((rule, idx) => (
+            <span key={idx} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+              {rule.region}
+            </span>
+          ))}
+          {campaign.rules.length > 2 && (
+            <span className="text-[10px] text-slate-400">+{campaign.rules.length - 2}</span>
+          )}
+        </div>
+      )}
+    </button>
+  );
+}
+
 export function AdminDashboard() {
   const campaignsQuery = useCampaigns();
   const createCampaignMutation = useCreateCampaign();
 
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
-  const [newCampaignName, setNewCampaignName] = useState("Frontend Readiness Campaign");
+  const [newCampaignName, setNewCampaignName] = useState("");
   const [ruleForm, setRuleForm] = useState<CreateRuleInput>(defaultRule);
 
   const [createStatus, setCreateStatus] = useState<SectionStatus>(null);
@@ -91,8 +141,8 @@ export function AdminDashboard() {
         variant: "success",
         message:
           totalMessages > 0
-            ? "Analytics refreshed successfully. Message activity is now visible."
-            : "Analytics refreshed. No message activity yet for this campaign.",
+            ? "Analytics refreshed. Message activity visible."
+            : "Analytics refreshed. No message activity yet.",
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to refresh analytics";
@@ -109,7 +159,7 @@ export function AdminDashboard() {
     setIsAutoRefreshingAnalytics(true);
     setAnalyticsStatus({
       variant: "success",
-      message: "Audience preview submitted. Syncing analytics every 5 seconds while events are processed.",
+      message: "Syncing analytics every 5s while events process...",
     });
 
     let attempts = 0;
@@ -121,7 +171,7 @@ export function AdminDashboard() {
           if (totalMessages > 0) {
             setAnalyticsStatus({
               variant: "success",
-              message: "Analytics sync completed. Message activity has started for this campaign.",
+              message: "Sync complete. Message activity started.",
             });
             stopAnalyticsAutoRefresh();
             return;
@@ -130,7 +180,7 @@ export function AdminDashboard() {
           if (attempts >= maxAttempts) {
             setAnalyticsStatus({
               variant: "error",
-              message: "Analytics still processing after 60 seconds. Use manual refresh to continue checking.",
+              message: "Still processing after 60s. Use manual refresh.",
             });
             stopAnalyticsAutoRefresh();
           }
@@ -139,7 +189,7 @@ export function AdminDashboard() {
           if (attempts >= maxAttempts) {
             setAnalyticsStatus({
               variant: "error",
-              message: "Analytics auto-sync encountered repeated errors. Use manual refresh to retry.",
+              message: "Auto-sync errors. Use manual refresh.",
             });
             stopAnalyticsAutoRefresh();
           }
@@ -150,11 +200,16 @@ export function AdminDashboard() {
   useEffect(() => stopAnalyticsAutoRefresh, []);
 
   async function handleCreateCampaign() {
+    if (!newCampaignName.trim() || newCampaignName.trim().length < 3) {
+      setCreateStatus({ variant: "error", message: "Campaign name must be at least 3 characters." });
+      return;
+    }
     setCreateStatus(null);
     try {
       const created = await createCampaignMutation.mutateAsync({ name: newCampaignName.trim() });
       setSelectedCampaignId(created.id);
-      setCreateStatus({ variant: "success", message: `Campaign #${created.id} created.` });
+      setNewCampaignName("");
+      setCreateStatus({ variant: "success", message: `Campaign "${created.name}" created successfully.` });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create campaign";
       setCreateStatus({ variant: "error", message });
@@ -191,7 +246,7 @@ export function AdminDashboard() {
       const result = await stratifyMutation.mutateAsync(rules);
       setPreviewStatus({
         variant: "success",
-        message: `Audience preview complete: ${result.matched_count} matched patients. Analytics will update as messages are processed.`,
+        message: `Audience preview: ${result.matched_count} patients matched.`,
       });
       startAnalyticsAutoRefresh();
     } catch (error) {
@@ -201,389 +256,286 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Create Campaign</h2>
-          <p className="mt-1 text-sm text-slate-600">Create a campaign, then select it to add rules and launch.</p>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+    <div className="grid gap-6 lg:grid-cols-4">
+      <div className="space-y-6 lg:col-span-1">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900">Create Campaign</h2>
+          <div className="mt-3 space-y-3">
             <input
               type="text"
               value={newCampaignName}
               onChange={(event) => setNewCampaignName(event.target.value)}
               placeholder="Campaign name"
               data-testid="campaign-name-input"
-              aria-label="Campaign name"
-              aria-invalid={newCampaignName.trim().length > 0 && newCampaignName.trim().length < 3}
-              aria-describedby={newCampaignName.trim().length > 0 && newCampaignName.trim().length < 3 ? "campaign-name-help" : undefined}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
             <button
               type="button"
               onClick={() => void handleCreateCampaign()}
               data-testid="create-campaign-button"
               disabled={createCampaignMutation.isPending || newCampaignName.trim().length < 3}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
-              {createCampaignMutation.isPending ? "Creating..." : "Create"}
+              {createCampaignMutation.isPending ? "Creating..." : "Create Campaign"}
             </button>
+            {createStatus && (
+              <StatusMessage
+                variant={createStatus.variant}
+                message={createStatus.message}
+                testId="admin-status-create"
+              />
+            )}
           </div>
-          {newCampaignName.trim().length > 0 && newCampaignName.trim().length < 3 ? (
-            <p id="campaign-name-help" className="mt-2 text-xs text-red-700" role="alert">
-              Campaign name must be at least 3 characters.
-            </p>
-          ) : null}
-          {createStatus ? (
-            <StatusMessage
-              variant={createStatus.variant}
-              message={createStatus.message}
-              testId="admin-status-create"
-              className="mt-3"
-            />
-          ) : null}
-        </article>
+        </section>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Selected Campaign</h2>
-          {campaignDetailQuery.isLoading ? (
-            <p className="mt-3 text-sm text-slate-600">Loading selected campaign...</p>
-          ) : campaignDetailQuery.isError ? (
-            <p className="mt-3 text-sm text-red-700" role="alert">
-              Failed to load campaign details.{" "}
-              <button
-                type="button"
-                onClick={() => void campaignDetailQuery.refetch()}
-                className="font-medium text-sky-800 underline hover:text-sky-600"
-              >
-                Retry
-              </button>
-            </p>
-          ) : selectedCampaign ? (
-            <div className="mt-3 space-y-1 text-sm text-slate-700">
-              <p>
-                <span className="font-semibold">ID:</span> {selectedCampaign.id}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-slate-900">Campaigns</h2>
+            <span className="text-xs text-slate-500">{campaigns.length} total</span>
+          </div>
+          <div className="mt-3 max-h-[400px] space-y-2 overflow-y-auto">
+            {campaignsQuery.isLoading ? (
+              <p className="text-sm text-slate-500">Loading...</p>
+            ) : campaignsQuery.isError ? (
+              <p className="text-sm text-red-600">
+                Failed to load.{" "}
+                <button onClick={() => void campaignsQuery.refetch()} className="underline">
+                  Retry
+                </button>
               </p>
-              <p>
-                <span className="font-semibold">Name:</span> {selectedCampaign.name}
-              </p>
-              <p>
-                <span className="font-semibold">Status:</span> {selectedCampaign.status}
-              </p>
-              <p>
-                <span className="font-semibold">Rules:</span> {selectedCampaign.rules.length}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-600">No campaign selected yet.</p>
-          )}
-        </article>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Campaign History</h2>
-        <p className="mt-1 text-sm text-slate-600">Select a campaign to inspect details, ROI, and regional coverage.</p>
-
-        {campaignsQuery.isLoading ? (
-          <p className="mt-4 text-sm text-slate-600">Loading campaigns...</p>
-        ) : campaignsQuery.isError ? (
-          <p className="mt-4 text-sm text-red-700" role="alert">
-            Failed to load campaigns.{" "}
-            <button
-              type="button"
-              onClick={() => void campaignsQuery.refetch()}
-              className="font-medium text-sky-800 underline hover:text-sky-600"
-            >
-              Retry
-            </button>
-          </p>
-        ) : campaigns.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-600">No campaigns found yet.</p>
-        ) : (
-          <div className="mt-4 grid gap-2">
-            {campaigns.slice(0, 10).map((campaign) => {
-              const isSelected = campaign.id === effectiveCampaignId;
-              return (
-                <button
+            ) : campaigns.length === 0 ? (
+              <p className="text-sm text-slate-500">No campaigns yet.</p>
+            ) : (
+              campaigns.map((campaign) => (
+                <CampaignRow
                   key={campaign.id}
-                  type="button"
-                  onClick={() => setSelectedCampaignId(campaign.id)}
-                  className={`rounded-xl border px-4 py-3 text-left transition ${
-                    isSelected
-                      ? "border-sky-600 bg-sky-50"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                  campaign={campaign}
+                  isSelected={campaign.id === effectiveCampaignId}
+                  onSelect={() => setSelectedCampaignId(campaign.id)}
+                />
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+
+      <div className="space-y-6 lg:col-span-3">
+        {selectedCampaign ? (
+          <>
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">{selectedCampaign.name}</h2>
+                  <p className="mt-1 text-sm text-slate-500">ID: {selectedCampaign.id} • {selectedCampaign.status}</p>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    selectedCampaign.status === "ACTIVE"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-100 text-slate-600"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="font-medium text-slate-900">
-                      #{campaign.id} - {campaign.name}
-                    </span>
-                    <span className="rounded-full bg-slate-900 px-2 py-1 text-xs text-white">{campaign.status}</span>
-                  </div>
+                  {selectedCampaign.status}
+                </span>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-base font-semibold text-slate-900">Targeting Rules</h3>
+              <p className="mt-1 text-sm text-slate-500">Define who this campaign targets.</p>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <label className="space-y-1 text-xs text-slate-700">
+                  Min Age
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={ruleForm.min_age}
+                    onChange={(event) =>
+                      setRuleForm((prev) => ({
+                        ...prev,
+                        min_age: Number(event.target.value),
+                      }))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-2 py-1.5"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-slate-700">
+                  Max Age
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={ruleForm.max_age}
+                    onChange={(event) =>
+                      setRuleForm((prev) => ({
+                        ...prev,
+                        max_age: Number(event.target.value),
+                      }))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-2 py-1.5"
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-slate-700">
+                  Region
+                  <select
+                    value={ruleForm.region}
+                    onChange={(event) =>
+                      setRuleForm((prev) => ({
+                        ...prev,
+                        region: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-2 py-1.5"
+                  >
+                    {MOROCCAN_REGIONS.map((region) => (
+                      <option key={region} value={region}>
+                        {region}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs text-slate-700">
+                  Milieu
+                  <select
+                    value={ruleForm.milieu}
+                    onChange={(event) =>
+                      setRuleForm((prev) => ({
+                        ...prev,
+                        milieu: event.target.value as MilieuName,
+                      }))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-2 py-1.5"
+                  >
+                    {MILIEUX.map((milieu) => (
+                      <option key={milieu} value={milieu}>
+                        {milieu}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs text-slate-700">
+                  Risk
+                  <select
+                    value={ruleForm.risk_level}
+                    onChange={(event) =>
+                      setRuleForm((prev) => ({
+                        ...prev,
+                        risk_level: event.target.value as RiskLevelName,
+                      }))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-2 py-1.5"
+                  >
+                    {RISK_LEVELS.map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleAddRule()}
+                  data-testid="add-rule-button"
+                  disabled={addRuleMutation.isPending || ruleForm.max_age < ruleForm.min_age}
+                  className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-sky-300"
+                >
+                  {addRuleMutation.isPending ? "Adding..." : "Add Rule"}
                 </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                <button
+                  type="button"
+                  onClick={() => void handleLaunch()}
+                  data-testid="launch-campaign-button"
+                  disabled={launchCampaignMutation.isPending}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                >
+                  {launchCampaignMutation.isPending ? "Launching..." : "Launch Campaign"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handlePreviewAudience()}
+                  data-testid="preview-audience-button"
+                  disabled={stratifyMutation.isPending || (selectedCampaign.rules.length ?? 0) === 0}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:bg-amber-300"
+                >
+                  {stratifyMutation.isPending ? "Previewing..." : "Preview Audience"}
+                </button>
+              </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Targeting Rule Builder</h2>
-        {ruleForm.max_age < ruleForm.min_age ? (
-          <p id="rule-age-range-help" className="mt-3 text-xs text-red-700" role="alert">
-            Max age must be greater than or equal to min age.
-          </p>
-        ) : null}
-        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <label className="grid gap-1 text-sm text-slate-700">
-            Min Age
-            <input
-              type="number"
-              min={0}
-              max={120}
-              value={ruleForm.min_age}
-              onChange={(event) =>
-                setRuleForm((prev) => ({
-                  ...prev,
-                  min_age: Number(event.target.value),
-                }))
-              }
-              aria-invalid={ruleForm.max_age < ruleForm.min_age}
-              aria-describedby={ruleForm.max_age < ruleForm.min_age ? "rule-age-range-help" : undefined}
-              className="rounded-lg border border-slate-300 px-3 py-2"
-            />
-          </label>
-          <label className="grid gap-1 text-sm text-slate-700">
-            Max Age
-            <input
-              type="number"
-              min={0}
-              max={120}
-              value={ruleForm.max_age}
-              onChange={(event) =>
-                setRuleForm((prev) => ({
-                  ...prev,
-                  max_age: Number(event.target.value),
-                }))
-              }
-              aria-invalid={ruleForm.max_age < ruleForm.min_age}
-              aria-describedby={ruleForm.max_age < ruleForm.min_age ? "rule-age-range-help" : undefined}
-              className="rounded-lg border border-slate-300 px-3 py-2"
-            />
-          </label>
-          <label className="grid gap-1 text-sm text-slate-700">
-            Region
-            <select
-              value={ruleForm.region}
-              onChange={(event) =>
-                setRuleForm((prev) => ({
-                  ...prev,
-                  region: event.target.value,
-                }))
-              }
-              className="rounded-lg border border-slate-300 px-3 py-2"
-            >
-              {MOROCCAN_REGIONS.map((region) => (
-                <option key={region} value={region}>
-                  {region}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm text-slate-700">
-            Milieu
-            <select
-              value={ruleForm.milieu}
-              onChange={(event) =>
-                setRuleForm((prev) => ({
-                  ...prev,
-                  milieu: event.target.value as MilieuName,
-                }))
-              }
-              className="rounded-lg border border-slate-300 px-3 py-2"
-            >
-              {MILIEUX.map((milieu) => (
-                <option key={milieu} value={milieu}>
-                  {milieu}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm text-slate-700">
-            Risk Level
-            <select
-              value={ruleForm.risk_level}
-              onChange={(event) =>
-                setRuleForm((prev) => ({
-                  ...prev,
-                  risk_level: event.target.value as RiskLevelName,
-                }))
-              }
-              className="rounded-lg border border-slate-300 px-3 py-2"
-            >
-              {RISK_LEVELS.map((riskLevel) => (
-                <option key={riskLevel} value={riskLevel}>
-                  {riskLevel}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+              {(ruleStatus || launchStatus || previewStatus) && (
+                <div className="mt-4 space-y-2">
+                  {ruleStatus && <StatusMessage variant={ruleStatus.variant} message={ruleStatus.message} testId="admin-status-rule" />}
+                  {launchStatus && <StatusMessage variant={launchStatus.variant} message={launchStatus.message} testId="admin-status-launch" />}
+                  {previewStatus && <StatusMessage variant={previewStatus.variant} message={previewStatus.message} testId="admin-status-preview" />}
+                </div>
+              )}
+            </section>
 
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => void handleAddRule()}
-            data-testid="add-rule-button"
-            disabled={effectiveCampaignId === null || addRuleMutation.isPending || ruleForm.max_age < ruleForm.min_age}
-            className="rounded-full bg-sky-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-sky-300"
-          >
-            {addRuleMutation.isPending ? "Adding Rule..." : "Add Rule"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleLaunch()}
-            data-testid="launch-campaign-button"
-            disabled={effectiveCampaignId === null || launchCampaignMutation.isPending}
-            className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-emerald-300"
-          >
-            {launchCampaignMutation.isPending ? "Launching..." : "Launch Campaign"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handlePreviewAudience()}
-            data-testid="preview-audience-button"
-            disabled={
-              effectiveCampaignId === null || stratifyMutation.isPending || (selectedCampaign?.rules.length ?? 0) === 0
-            }
-            className="rounded-full bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:bg-amber-300"
-          >
-            {stratifyMutation.isPending ? "Previewing..." : "Preview Audience"}
-          </button>
-        </div>
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Campaign Metrics</h3>
+                  <p className="mt-1 text-sm text-slate-500">Real-time ROI and engagement data.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-500">
+                    Updated: {analyticsLastUpdated ?? "—"} • Auto: {isAutoRefreshingAnalytics ? "on" : "off"}
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="refresh-analytics-button"
+                    onClick={() => void handleManualAnalyticsRefresh()}
+                    disabled={analyticsFetching}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {analyticsFetching ? "Refreshing..." : "Refresh"}
+                  </button>
+                </div>
+              </div>
 
-        {ruleStatus ? (
-          <StatusMessage
-            variant={ruleStatus.variant}
-            message={ruleStatus.message}
-            testId="admin-status-rule"
-            className="mt-3"
-          />
-        ) : null}
-        {launchStatus ? (
-          <StatusMessage
-            variant={launchStatus.variant}
-            message={launchStatus.message}
-            testId="admin-status-launch"
-            className="mt-3"
-          />
-        ) : null}
-        {previewStatus ? (
-          <StatusMessage
-            variant={previewStatus.variant}
-            message={previewStatus.message}
-            testId="admin-status-preview"
-            className="mt-3"
-          />
-        ) : null}
-      </section>
+              {analyticsStatus && (
+                <div className="mt-3">
+                  <StatusMessage variant={analyticsStatus.variant} message={analyticsStatus.message} testId="admin-status-analytics" />
+                </div>
+              )}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Impact metrics</h2>
-            <p className="mt-1 text-sm text-slate-600">ROI from analytics-service (updates as Kafka events land).</p>
-          </div>
-          <button
-            type="button"
-            data-testid="refresh-analytics-button"
-            onClick={() => void handleManualAnalyticsRefresh()}
-            disabled={effectiveCampaignId === null || analyticsFetching}
-            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {analyticsFetching ? "Refreshing..." : "Refresh metrics"}
-          </button>
-        </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <MetricCard title="Messages Sent" value={roiQuery.data?.total_messages ?? 0} testId="roi-total-messages" />
+                <MetricCard title="Appointments" value={roiQuery.data?.total_bookings ?? 0} testId="roi-total-bookings" />
+                <MetricCard title="Conversion" value={`${roiQuery.data?.conversion_rate ?? 0}%`} testId="roi-conversion-rate" />
+              </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
-          <span>
-            Last updated: <strong>{analyticsLastUpdated ?? "not refreshed yet"}</strong>
-          </span>
-          <span>
-            Auto-sync: <strong>{isAutoRefreshingAnalytics ? "running" : "idle"}</strong>
-          </span>
-        </div>
-
-        {analyticsStatus ? (
-          <StatusMessage
-            variant={analyticsStatus.variant}
-            message={analyticsStatus.message}
-            testId="admin-status-analytics"
-            className="mt-3"
-          />
-        ) : null}
-
-        {effectiveCampaignId === null ? (
-          <p className="mt-4 text-sm text-slate-600">Select a campaign to load ROI.</p>
-        ) : roiQuery.isLoading && !roiQuery.data ? (
-          <p className="mt-4 text-sm text-slate-600">Loading ROI...</p>
-        ) : roiQuery.isError ? (
-          <p className="mt-4 text-sm text-red-700" role="alert">
-            Failed to load ROI.{" "}
-            <button
-              type="button"
-              onClick={() => void roiQuery.refetch()}
-              className="font-medium text-sky-800 underline hover:text-sky-600"
-            >
-              Retry
-            </button>
-          </p>
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-slate-900">Regional Breakdown</h4>
+                <div className="mt-3 h-64">
+                  {(regionalQuery.data?.regions.length ?? 0) > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={regionalQuery.data?.regions}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="region" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Bar dataKey="total_messages" fill="#1d6f8a" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="total_bookings" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-sm text-slate-500">Run audience preview to see regional data.</p>
+                  )}
+                </div>
+              </div>
+            </section>
+          </>
         ) : (
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <MetricCard title="Total Messages" value={roiQuery.data?.total_messages ?? 0} testId="roi-total-messages" />
-            <MetricCard title="Total Bookings" value={roiQuery.data?.total_bookings ?? 0} testId="roi-total-bookings" />
-            <MetricCard title="Conversion Rate" value={`${roiQuery.data?.conversion_rate ?? 0}%`} testId="roi-conversion-rate" />
+          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-300 p-8">
+            <p className="text-slate-500">Select a campaign from the list to manage it.</p>
           </div>
         )}
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Regional Coverage</h2>
-        <p className="mt-1 text-sm text-slate-600">Messages and bookings by patient region.</p>
-
-        {effectiveCampaignId === null ? (
-          <p className="mt-4 text-sm text-slate-600">Select a campaign to load regional coverage.</p>
-        ) : regionalQuery.isLoading && !regionalQuery.data ? (
-          <p className="mt-4 text-sm text-slate-600">Loading regional metrics...</p>
-        ) : regionalQuery.isError ? (
-          <p className="mt-4 text-sm text-red-700" role="alert">
-            Failed to load regional metrics.{" "}
-            <button
-              type="button"
-              onClick={() => void regionalQuery.refetch()}
-              className="font-medium text-sky-800 underline hover:text-sky-600"
-            >
-              Retry
-            </button>
-          </p>
-        ) : (regionalQuery.data?.regions.length ?? 0) === 0 ? (
-          <p data-testid="regional-empty" className="mt-4 text-sm text-slate-600">
-            No regional data yet for this campaign. Run an audience preview and refresh metrics after messages are processed.
-          </p>
-        ) : (
-          <div className="mt-4 h-72 w-full" data-testid="regional-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={regionalQuery.data?.regions} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="region" hide />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="total_messages" fill="#1d6f8a" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="total_bookings" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </section>
+      </div>
     </div>
   );
 }
