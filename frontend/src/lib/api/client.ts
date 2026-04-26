@@ -1,4 +1,5 @@
 import type {
+  ActivityResponse,
   ActiveCampaignQuery,
   Campaign,
   ChannelName,

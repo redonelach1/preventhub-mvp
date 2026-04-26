@@ -136,3 +136,20 @@ export function useUpdatePreference(patientId: number | null) {
     },
   });
 }
+
+
+export function useActivity(patientId: number | null) {
+  return useQuery({
+    queryKey: ["analytics", "activity", patientId],
+    queryFn: () => api.getActivity(patientId as number),
+    enabled: patientId !== null,
+  });
+}
+
+
+export function useMessageTemplates() {
+  return useQuery({
+    queryKey: ["communication", "templates"],
+    queryFn: api.listTemplates,
+  });
+}

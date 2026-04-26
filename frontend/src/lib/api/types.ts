@@ -82,3 +82,15 @@ export interface TrackingEvent {
   campaign_id: number;
   action: "clicked" | "booked";
 }
+
+
+export interface ActivityItem {
+  type: string;
+  campaign_id: number;
+  campaign_name: string;
+  timestamp: string | null;
+}
+
+export interface ActivityResponse {
+  activities: ActivityItem[];
+}
