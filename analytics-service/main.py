@@ -1,23 +1,34 @@
 import asyncio
 import json
 import logging
+import time
+from datetime import datetime
 import os
 import time
+from datetime import datetime
 
 from confluent_kafka import Consumer
 from confluent_kafka.admin import AdminClient, NewTopic
 from fastapi import Depends, FastAPI
 from sqlalchemy import bindparam, func, text
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from database import Base, SessionLocal, engine, get_db, stratification_engine
 from models import RawEngagement, RawMessage
 from schemas import (
+    ActivityItem,
+    ActivityResponse,
     RawEngagementEvent,
     RawMessageEvent,
     RegionalCoverageResponse,
     RegionalCoverageRow,
     RoiResponse,
+    ActivityResponse,
+    ActivityItem,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +39,20 @@ app = FastAPI(title="analytics-service", version="1.0.0")
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 MESSAGE_SENT_TOPIC = os.getenv("MESSAGE_SENT_TOPIC", "message.sent")
 USER_ENGAGED_TOPIC = os.getenv("USER_ENGAGED_TOPIC", "user.engaged")
+CAMPAIGN_DATABASE_URL = os.getenv(
+    "CAMPAIGN_DATABASE_URL",
+    "postgresql+psycopg2://preventhub:preventhub@postgres:5432/campaign_db",
+)
+campaign_engine = create_engine(CAMPAIGN_DATABASE_URL, pool_pre_ping=True)
+CampaignSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=campaign_engine)
 CONSUMER_GROUP = os.getenv("KAFKA_CONSUMER_GROUP", "analytics-service-group")
+
+CAMPAIGN_DATABASE_URL = os.getenv(
+    "CAMPAIGN_DATABASE_URL",
+    "postgresql+psycopg2://preventhub:preventhub@postgres:5432/campaign_db",
+)
+campaign_engine = create_engine(CAMPAIGN_DATABASE_URL, pool_pre_ping=True)
+CampaignSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=campaign_engine)
 
 consumer = Consumer(
     {
@@ -47,11 +71,34 @@ def _poll_once():
     return consumer.poll(1.0)
 
 
+def _parse_timestamp(ts_str):
+    if not ts_str:
+        return None
+    try:
+        return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _parse_timestamp(ts_str: str | None) -> datetime | None:
+    if not ts_str:
+        return None
+    try:
+        return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 def _persist_message(payload: dict) -> None:
     event = RawMessageEvent(**payload)
+    ts = _parse_timestamp(payload.get("timestamp"))
     db = SessionLocal()
     try:
-        db.add(RawMessage(patient_id=event.patient_id, campaign_id=event.campaign_id))
+        db.add(RawMessage(
+            patient_id=event.patient_id,
+            campaign_id=event.campaign_id,
+            timestamp=ts,
+        ))
         db.commit()
     except Exception:
         db.rollback()
@@ -62,6 +109,7 @@ def _persist_message(payload: dict) -> None:
 
 def _persist_engagement(payload: dict) -> None:
     event = RawEngagementEvent(**payload)
+    ts = _parse_timestamp(payload.get("timestamp"))
     db = SessionLocal()
     try:
         db.add(
@@ -69,6 +117,7 @@ def _persist_engagement(payload: dict) -> None:
                 patient_id=event.patient_id,
                 campaign_id=event.campaign_id,
                 action=event.action,
+                timestamp=ts,
             )
         )
         db.commit()
@@ -220,13 +269,4 @@ def get_regional_coverage(campaign_id: int, db: Session = Depends(get_db)):
                 region=region_name,
                 total_messages=total_messages,
                 total_bookings=total_bookings,
-                conversion_rate=round(conversion_rate, 2),
-            )
-        )
-
-    return RegionalCoverageResponse(campaign_id=campaign_id, regions=rows)
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "service": "analytics-service"}
+                conversion_rate=round(c

@@ -31,3 +31,14 @@ class RegionalCoverageRow(BaseModel):
 class RegionalCoverageResponse(BaseModel):
     campaign_id: int
     regions: list[RegionalCoverageRow]
+
+
+class ActivityItem(BaseModel):
+    type: str
+    campaign_id: int
+    campaign_name: str
+    timestamp: str | None = None
+
+
+class ActivityResponse(BaseModel):
+    activities: list[ActivityItem]
