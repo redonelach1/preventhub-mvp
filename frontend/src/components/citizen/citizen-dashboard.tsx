@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { CHANNELS, MOROCCAN_REGIONS, MILIEUX, RISK_LEVELS } from "@/lib/api/constants";
-import { useActiveCampaigns, usePreference, useUpdatePreference } from "@/lib/api/hooks";
+import { useActiveCampaigns, usePreference, useUpdatePreference, useActivity, useMessageTemplates } from "@/lib/api/hooks";
 import { api } from "@/lib/api/client";
 import { StatusMessage } from "@/components/ui/status-message";
 import type { ActiveCampaignQuery, Campaign, ChannelName, MilieuName, RiskLevelName } from "@/lib/api/types";
@@ -47,22 +47,149 @@ function CampaignCard({
           {campaign.status}
         </span>
       </div>
-      {campaign.rules.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {campaign.rules.slice(0, 3).map((rule, idx) => (
-            <span
-              key={idx}
-              className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
-            >
-              {rule.region}
-            </span>
+      <div className="mt-3 space-y-1">
+        <p className="text-xs text-slate-500 font-medium">Targeting Criteria</p>
+        <div className="flex flex-wrap gap-1">
+          {campaign.rules.length === 0 ? (
+            <span className="text-xs text-slate-400">No specific targeting rules</span>
+          ) : (
+            campaign.rules.map((rule, idx) => (
+              <span
+                key={idx}
+                className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
+              >
+                {rule.min_age}-{rule.max_age}yo, {rule.region}, {rule.milieu}, {rule.risk_level}
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function formatRelativeTime(timestamp: string | null): string {
+  if (!timestamp) return 'Recent';
+  try {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  } catch {
+    return 'Recent';
+  }
+}
+
+function LoadingSkeleton({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="space-y-2 animate-pulse">
+      {Array.from({ length: lines }).map((_, i) => (
+        <div key={i} className="h-4 bg-slate-200 rounded"></div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ 
+  title, 
+  message, 
+  action 
+}: { 
+  title: string; 
+  message: string; 
+  action?: React.ReactNode 
+}) {
+  return (
+    <div className="text-center py-6">
+      <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+        <svg className="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+        </svg>
+      </div>
+      <p className="text-sm font-medium text-slate-900">{title}</p>
+      <p className="mt-1 text-xs text-slate-500">{message}</p>
+      {action && <div className="mt-3">{action}</div>}
+    </div>
+  );
+}
+
+function TemplatePreview({ campaignId }: { campaignId: number }) {
+  const templatesQuery = useMessageTemplates();
+  
+  const templateContent = templatesQuery.data?.[0]?.content || 
+    "Your recommended prevention opportunity is available. Book your appointment today.";
+  
+  return (
+    <div className="mt-4 rounded-lg border border-orange-200 bg-white p-4">
+      <p className="text-sm font-medium text-slate-700">Message Preview</p>
+      <p className="mt-2 text-sm text-slate-600 italic">&ldquo;{templateContent}&rdquo;</p>
+    </div>
+  );
+}
+
+function ActivitySection({ patientId }: { patientId: number }) {
+  const activityQuery = useActivity(patientId);
+
+  const typeLabels: Record<string, string> = {
+    message: "Message Received",
+    click: "You Showed Interest",
+    booked: "Appointment Booked",
+  };
+
+  const typeColors: Record<string, string> = {
+    message: "bg-blue-100 text-blue-700",
+    click: "bg-slate-100 text-slate-700",
+    booked: "bg-emerald-100 text-emerald-700",
+  };
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="text-lg font-semibold text-slate-900">Your Activity</h2>
+      
+      {activityQuery.isLoading ? (
+        <p className="mt-3 text-sm text-slate-600">Loading...</p>
+      ) : activityQuery.isError ? (
+        <p className="mt-3 text-sm text-red-600">
+          Failed to load activity.{' '}
+          <button type="button" onClick={() => void activityQuery.refetch()} className="font-medium text-sky-700 underline">
+            Retry
+          </button>
+        </p>
+      ) : (activityQuery.data?.activities?.length ?? 0) === 0 ? (
+        <p className="mt-3 text-sm text-slate-600">
+          No activity yet. Select a campaign above to get started.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {activityQuery.data.activities.slice(0, 5).map((item, idx) => (
+            <div key={idx} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-900">{item.campaign_name}</p>
+                <p className="text-xs text-slate-500">
+                  {item.timestamp ? new Date(item.timestamp).toLocaleDateString() : "Recent"}
+                </p>
+              </div>
+              <span className={}>
+                {typeLabels[item.type] || item.type}
+              </span>
+            </div>
           ))}
-          {campaign.rules.length > 3 && (
-            <span className="text-xs text-slate-400">+{campaign.rules.length - 3} more</span>
+          {(activityQuery.data?.activities?.length ?? 0) > 5 && (
+            <p className="text-xs text-slate-500">
+              +{activityQuery.data.activities.length - 5} more activities
+            </p>
           )}
         </div>
       )}
-    </button>
+    </section>
   );
 }
 
@@ -223,7 +350,7 @@ export function CitizenDashboard() {
           </p>
 
           {activeCampaignsQuery.isLoading ? (
-            <p className="mt-4 text-sm text-slate-600">Loading campaigns...</p>
+            <div className="mt-4"><LoadingSkeleton /></div>
           ) : activeCampaignsQuery.isError ? (
             <p className="mt-4 text-sm text-red-700" role="alert">
               Failed to load campaigns.{" "}
@@ -263,6 +390,8 @@ export function CitizenDashboard() {
             <p className="mt-1 text-sm text-slate-600">
               You selected: <span className="font-medium">{selectedCampaign.name}</span>
             </p>
+            
+            <TemplatePreview campaignId={selectedCampaign.id} />
 
             <div className="mt-4 flex flex-wrap gap-3">
               <button
@@ -382,6 +511,10 @@ export function CitizenDashboard() {
             to see different recommendations.
           </p>
         </section>
+
+        {patientId > 0 && (
+          <ActivitySection patientId={patientId} />
+        )}
       </div>
     </div>
   );
