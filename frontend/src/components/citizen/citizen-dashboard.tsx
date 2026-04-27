@@ -6,7 +6,7 @@ import { CHANNELS, MOROCCAN_REGIONS, MILIEUX, RISK_LEVELS } from "@/lib/api/cons
 import { useActiveCampaigns, usePreference, useUpdatePreference, useActivity, useMessageTemplates } from "@/lib/api/hooks";
 import { api } from "@/lib/api/client";
 import { StatusMessage } from "@/components/ui/status-message";
-import type { ActiveCampaignQuery, Campaign, ChannelName, MilieuName, RiskLevelName } from "@/lib/api/types";
+import type { ActivityItem, ActiveCampaignQuery, Campaign, ChannelName, MilieuName, RiskLevelName } from "@/lib/api/types";
 
 const DEFAULT_PROFILE: ActiveCampaignQuery = {
   age: 43,
@@ -137,6 +137,7 @@ function TemplatePreview({ campaignId }: { campaignId: number }) {
 
 function ActivitySection({ patientId }: { patientId: number }) {
   const activityQuery = useActivity(patientId);
+  const activities = activityQuery.data?.activities ?? [];
 
   const typeLabels: Record<string, string> = {
     message: "Message Received",
@@ -163,13 +164,13 @@ function ActivitySection({ patientId }: { patientId: number }) {
             Retry
           </button>
         </p>
-      ) : (activityQuery.data?.activities?.length ?? 0) === 0 ? (
+      ) : activities.length === 0 ? (
         <p className="mt-3 text-sm text-slate-600">
           No activity yet. Select a campaign above to get started.
         </p>
       ) : (
         <div className="mt-3 space-y-2">
-          {activityQuery.data.activities.slice(0, 5).map((item, idx) => (
+          {activities.slice(0, 5).map((item: ActivityItem, idx: number) => (
             <div key={idx} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
               <div className="flex-1">
                 <p className="text-sm font-medium text-slate-900">{item.campaign_name}</p>
@@ -177,14 +178,18 @@ function ActivitySection({ patientId }: { patientId: number }) {
                   {item.timestamp ? new Date(item.timestamp).toLocaleDateString() : "Recent"}
                 </p>
               </div>
-              <span className={}>
+              <span
+                className={`rounded-full px-2 py-1 text-xs font-medium ${
+                  typeColors[item.type] || "bg-slate-100 text-slate-700"
+                }`}
+              >
                 {typeLabels[item.type] || item.type}
               </span>
             </div>
           ))}
-          {(activityQuery.data?.activities?.length ?? 0) > 5 && (
+          {activities.length > 5 && (
             <p className="text-xs text-slate-500">
-              +{activityQuery.data.activities.length - 5} more activities
+              +{activities.length - 5} more activities
             </p>
           )}
         </div>

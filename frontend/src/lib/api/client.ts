@@ -126,6 +126,10 @@ export const api = {
     );
   },
 
+  getActivity(patientId: number) {
+    return request<ActivityResponse>(`/api/analytics/activity/${patientId}`);
+  },
+
   listTemplates() {
     return request<MessageTemplate[]>("/api/communication/templates");
   },
