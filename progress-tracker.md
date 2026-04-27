@@ -12,7 +12,7 @@ It should be updated at each meaningful step of backend or frontend development.
 ## Project Status Snapshot
 
 Current date:
-- 2026-04-24
+- 2026-04-27
 
 Overall status:
 - Backend foundation: completed and verified
@@ -108,6 +108,7 @@ Details:
 - implemented dual-topic Kafka consumer
 - persisted raw message and raw engagement events
 - implemented ROI endpoint
+- implemented citizen activity timeline endpoint
 - verified conversion rate calculations in end-to-end testing
 
 ### 8. Testing and verification
@@ -150,6 +151,24 @@ Details:
   - `POST /track/adherence`
 - analytics-service exposes regional coverage:
   - `GET /coverage/regional?campaign_id={id}`
+
+### 11. Docker build/runtime recovery (2026-04-27)
+Status:
+- completed and verified
+
+Details:
+- fixed frontend Docker build failures in `frontend/src/components/citizen/citizen-dashboard.tsx`:
+  - resolved JSX parser error (`className={}`)
+  - resolved strict TypeScript issues for activity rendering
+- added missing activity client method to frontend API client:
+  - `frontend/src/lib/api/client.ts` (`getActivity`)
+- repaired corrupted/truncated analytics implementation file:
+  - `analytics-service/main.py`
+- validated end-to-end container lifecycle:
+  - `docker compose build frontend` passed
+  - `docker compose build` passed for all services
+  - `docker compose up -d` started stack successfully
+  - analytics service logs confirmed healthy startup
 
 ## Verified Results
 

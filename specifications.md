@@ -279,6 +279,8 @@ Endpoints:
 - `GET /roi/{campaign_id}`
 - `GET /coverage/regional?campaign_id={id}`
   - aggregate campaign message and booking outcomes by region
+- `GET /activity/{patient_id}`
+  - returns recent patient message and engagement timeline for citizen dashboard activity view
 - `GET /health`
 
 Event consumption:
@@ -359,6 +361,7 @@ Verified observations include:
 - stratification against valid Moroccan segmentation returns realistic audience sizes
 - communication-service emits message activity for matched patients
 - analytics-service eventually reflects asynchronous events in ROI output
+- analytics-service now exposes patient activity timeline used by citizen portal (`GET /activity/{patient_id}`)
 - campaign-service supports admin history views and personalized active campaign filtering
 - communication-service exposes templates and patient communication preference persistence
 - analytics-service exposes regional coverage for dashboard segmentation views
@@ -435,6 +438,7 @@ Delivered in frontend:
   - profile filters (`age`, `region`, `milieu`, `risk_level`) for active campaigns
   - engagement aliases (`track/click`, `track/adherence`)
   - communication preference read/update
+  - activity timeline panel sourced from analytics activity endpoint
   - separate status regions for engagement and preference actions
 
 Automated verification currently in repo:
@@ -473,3 +477,12 @@ This file is the canonical working specification and should be updated when:
 - gateway routes change
 - frontend phases are refined
 - major milestones are completed
+
+## 10. Latest Stability Update (2026-04-27)
+
+Verified in Docker workflow:
+- frontend build failures were resolved by fixing citizen dashboard JSX/TypeScript issues
+- API client now includes the activity method required by citizen hooks
+- `analytics-service/main.py` was repaired from a truncated state and validated to start successfully
+- `docker compose build` now completes successfully for all services
+- `docker compose up -d` starts stack services with analytics running

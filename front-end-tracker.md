@@ -15,7 +15,7 @@ Cross-reference:
 ## Project Status Snapshot
 
 Current date:
-- 2026-04-24
+- 2026-04-27
 
 Overall status:
 - Frontend foundation: completed
@@ -51,6 +51,7 @@ Contracts available now:
 - Analytics:
   - `GET /api/analytics/roi/{campaign_id}`
   - `GET /api/analytics/coverage/regional?campaign_id={id}`
+  - `GET /api/analytics/activity/{patient_id}`
 
 ## Phase Plan
 
@@ -207,6 +208,16 @@ Progress evidence (latest execution slice):
   - `npm run typecheck` passed
   - `npm run test -- --run` passed (7 tests: utilities + page + citizen + admin)
 
+Progress evidence (2026-04-27 recovery slice):
+- frontend Docker build blocker fixed in `frontend/src/components/citizen/citizen-dashboard.tsx`:
+  - resolved JSX parser failure (`className={}`)
+  - resolved strict TypeScript issues in activity mapping/null-handling
+- missing activity client method added in `frontend/src/lib/api/client.ts` (`getActivity`)
+- Docker-only verification performed (no local npm dependency):
+  - `docker compose build frontend` passed
+  - `docker compose build` passed for all services
+  - `docker compose up -d` reached running state for frontend and backend containers
+
 ## Testing Matrix
 
 Unit tests:
@@ -252,6 +263,7 @@ Risks to monitor:
 - backend contract drift during frontend build
 - async analytics propagation timing in e2e tests
 - stale NGINX container config after routing changes (mitigation: recreate nginx container in CI and local test runs)
+- accidental truncation/corruption of backend service source files (mitigation: run `docker compose logs` smoke checks after every rebuild)
 
 Observed note:
 - if NGINX config changes (especially frontend `/` proxy path), recreate container before running e2e to avoid stale 404 behavior.
